@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Sandbox Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        canvas {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(100,100,100,0.4);
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(100,100,100,0.6);
+        }
+    </style>
+</head>
+<body class="h-full bg-slate-900 text-slate-100 flex flex-col overflow-hidden">
+
+    <header class="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between shrink-0 shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="bg-emerald-600 text-white p-2 rounded-xl flex items-center justify-center shadow-inner">
+                <i class="fa-solid fa-cube text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg tracking-wide text-emerald-400 flex items-center gap-2">
+                    Pixel Sandbox Pro <span class="text-xs bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-800">v2.5 Slime Edition</span>
+                </h1>
+                <p class="text-xs text-slate-400">Laboratoire de Physique & Éléments Avancés</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <!-- Simulation Controls -->
+            <div class="bg-slate-900/80 p-1 rounded-xl flex items-center space-x-1 border border-slate-700">
+                <button id="btn-play" onclick="togglePlay()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow">
+                    <i id="play-icon" class="fa-solid fa-pause"></i> <span id="play-text">Pause</span>
+                </button>
+                <button onclick="stepSimulation()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs font-medium flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-forward-step"></i> Pas
+                </button>
+                <button onclick="clearCanvas()" class="px-3 py-1.5 bg-rose-900/60 hover:bg-rose-800/80 text-rose-200 rounded-lg text-xs font-medium flex items-center gap-1.5 transition border border-rose-700/50">
+                    <i class="fa-solid fa-trash"></i> Vider
+                </button>
+            </div>
+
+            <!-- Utility Controls -->
+            <div class="flex items-center space-x-1">
+                <button onclick="openWiki()" class="p-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-sm transition tooltip" title="Guide & Wiki">
+                    <i class="fa-solid fa-book-open"></i>
+                </button>
+                <button onclick="toggleSound()" id="sound-btn" class="p-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-sm transition" title="Activer Sons">
+                    <i id="sound-icon" class="fa-solid fa-volume-xmark"></i>
+                </button>
+                <button onclick="toggleFullscreen()" class="p-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-sm transition" title="Plein écran">
+                    <i class="fa-solid fa-expand"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden relative">
+        <!-- Main Sandbox Viewport -->
+        <div class="flex-1 bg-slate-950 relative flex items-center justify-center overflow-hidden" id="canvas-container">
+            <canvas id="sandboxCanvas" class="shadow-2xl cursor-crosshair"></canvas>
+            
+            <!-- On-Screen HUD Overlay -->
+            <div class="absolute top-4 left-4 bg-slate-900/80 backdrop-blur-md border border-slate-700/80 rounded-xl p-3 text-xs flex flex-col space-y-1.5 shadow-lg pointer-events-none text-slate-300">
+                <div class="flex justify-between gap-4 font-mono">
+                    <span>FPS: <strong id="fps-display" class="text-emerald-400">60</strong></span>
+                    <span>Particules: <strong id="particle-count" class="text-emerald-400">0</strong></span>
+                </div>
+                <div class="flex justify-between gap-4 font-mono">
+                    <span>Outil: <strong id="hud-tool" class="text-amber-400">Sable</strong></span>
+                    <span>Taille: <strong id="hud-brush" class="text-amber-400">5</strong></span>
+                </div>
+            </div>
+
+            <!-- Toast / Message Box -->
+            <div id="toast" class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-800/90 text-slate-200 border border-slate-600 px-4 py-2 rounded-xl text-xs shadow-2xl transition-all duration-300 opacity-0 pointer-events-none flex items-center gap-2 z-50">
+                <i class="fa-solid fa-circle-info text-emerald-400"></i>
+                <span id="toast-msg">Notification</span>
+            </div>
+        </div>
+
+        <div class="w-80 bg-slate-900 border-l border-slate-700 flex flex-col shrink-0 select-none shadow-xl">
+            <!-- Category Tabs -->
+            <div class="grid grid-cols-5 gap-1 p-2 bg-slate-800/60 border-b border-slate-700">
+                <button onclick="switchCategory('solides')" id="cat-solides" class="cat-btn py-2 px-1 text-xs font-semibold rounded-lg text-emerald-400 bg-slate-700/80 transition flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-mountain text-sm"></i> <span>Solide</span>
+                </button>
+                <button onclick="switchCategory('fluides')" id="cat-fluides" class="cat-btn py-2 px-1 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 transition flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-water text-sm"></i> <span>Fluide</span>
+                </button>
+                <button onclick="switchCategory('gaz')" id="cat-gaz" class="cat-btn py-2 px-1 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 transition flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-fire text-sm"></i> <span>Énergie</span>
+                </button>
+                <button onclick="switchCategory('mecanique')" id="cat-mecanique" class="cat-btn py-2 px-1 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 transition flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-gears text-sm"></i> <span>Meca</span>
+                </button>
+                <button onclick="switchCategory('special')" id="cat-special" class="cat-btn py-2 px-1 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 transition flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-flask text-sm"></i> <span>Slime</span>
+                </button>
+            </div>
+
+            <!-- Elements Grid Container -->
+            <div id="elements-grid" class="flex-1 p-3 overflow-y-auto custom-scrollbar grid grid-cols-2 gap-2 content-start">
+                <!-- Dynamically populated via JS -->
+            </div>
+
+            <!-- Brush Size & Mode Controls -->
+            <div class="p-3 bg-slate-800/80 border-t border-slate-700 flex flex-col space-y-3">
+                <div class="flex items-center justify-between text-xs font-medium text-slate-300">
+                    <span>Taille du Pinceau</span>
+                    <span id="brush-size-val" class="font-mono text-emerald-400">5 px</span>
+                </div>
+                <input type="range" id="brush-size-range" min="1" max="25" value="5" class="w-full accent-emerald-500 cursor-pointer">
+
+                <div class="flex items-center justify-between pt-1">
+                    <span class="text-xs text-slate-300">Forme</span>
+                    <div class="flex bg-slate-900 rounded-lg p-0.5 border border-slate-700">
+                        <button onclick="setBrushShape('circle')" id="shape-circle" class="px-3 py-1 text-xs rounded-md bg-emerald-600 text-white font-medium transition">Cercle</button>
+                        <button onclick="setBrushShape('square')" id="shape-square" class="px-3 py-1 text-xs rounded-md text-slate-400 hover:text-slate-200 transition">Carré</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="wiki-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in">
+            <div class="p-4 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+                <div class="flex items-center space-x-2 text-emerald-400 font-bold text-base">
+                    <i class="fa-solid fa-book"></i> <span>Guide & Wiki interactif - Pixel Sandbox Pro</span>
+                </div>
+                <button onclick="closeWiki()" class="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-700 transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="p-4 border-b border-slate-800 bg-slate-900/50">
+                <div class="relative">
+                    <i class="fa-solid fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                    <input type="text" id="wiki-search" oninput="filterWiki(this.value)" placeholder="Rechercher un élément (ex: Slime Rebondissant, Moteur, Acide)..." class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition">
+                </div>
+            </div>
+            <div id="wiki-content" class="flex-1 p-4 overflow-y-auto custom-scrollbar space-y-4">
+                <!-- Dynamically populated wiki cards -->
+            </div>
+            <div class="p-3 bg-slate-800/60 border-t border-slate-700 text-right text-xs text-slate-400">
+                Astuce : Utilisez le clic gauche pour dessiner, et le clic droit (ou outil gomme) pour effacer.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONSTANTS & CONFIGURATION ---
+        const CELL_SIZE = 4; // Size of each pixel cell in canvas coordinates
+        let WIDTH = 160;     // Grid columns
+        let HEIGHT = 100;    // Grid rows
+        
+        let canvas, ctx;
+        let isRunning = true;
+        let currentCategory = 'solides';
+        let currentElementId = 'sand';
+        let brushSize = 5;
+        let brushShape = 'circle';
+        let isDrawing = false;
+        let lastMouseX = 0, lastMouseY = 0;
+        let soundEnabled = false;
+        let audioCtx = null;
+
+        // Stats tracking
+        let lastTime = performance.now();
+        let frameCount = 0;
+        let fps = 60;
+        let totalParticles = 0;
+
+        // --- ELEMENT DEFINITIONS & CATEGORIES ---
+        const ELEMENTS = {
+            // SOLIDES
+            sand: { id: 'sand', name: 'Sable', cat: 'solides', color: '#eab308', type: 'powder', desc: 'Granule solide qui s’écoule et s’empile.', icon: 'fa-cubes' },
+            dirt: { id: 'dirt', name: 'Terre', cat: 'solides', color: '#854d0e', type: 'powder', desc: 'Poussière lourde et opaque.', icon: 'fa-earth-americas' },
+            stone: { id: 'stone', name: 'Pierre', cat: 'solides', color: '#64748b', type: 'solid', desc: 'Bloc rocheux inamovible et résistant.', icon: 'fa-mountain' },
+            wood: { id: 'wood', name: 'Bois', cat: 'solides', color: '#9a3412', type: 'solid', desc: 'Matériau inflammable et solide.', icon: 'fa-tree' },
+            glass: { id: 'glass', name: 'Verre', cat: 'solides', color: '#38bdf8', type: 'solid', desc: 'Transparent et fragile.', icon: 'fa-window-maximize' },
+
+            // FLUIDES
+            water: { id: 'water', name: 'Eau', cat: 'fluides', color: '#3b82f6', type: 'liquid', desc: 'Fluide qui s’écoule, éteint le feu et conduit l’électricité.', icon: 'fa-water' },
+            oil: { id: 'oil', name: 'Huile', cat: 'fluides', color: '#713f12', type: 'liquid', desc: 'Liquide visqueux et très inflammable.', icon: 'fa-oil-well' },
+            lava: { id: 'lava', name: 'Lave', cat: 'fluides', color: '#f97316', type: 'liquid', desc: 'Fluide brûlant qui transforme l’eau en pierre et enflamme tout.', icon: 'fa-volcano' },
+            acid: { id: 'acid', name: 'Acide', cat: 'fluides', color: '#10b981', type: 'liquid', desc: 'Dissout la plupart des solides au contact.', icon: 'fa-flask-vial' },
+
+            // GAZ & ÉNERGIE
+            fire: { id: 'fire', name: 'Feu', cat: 'gaz', color: '#ef4444', type: 'gas', desc: 'Brûle les matériaux inflammables et monte.', icon: 'fa-fire' },
+            smoke: { id: 'smoke', name: 'Fumée', cat: 'gaz', color: '#94a3b8', type: 'gas', desc: 'Gaz chaud qui s’élève vers le ciel.', icon: 'fa-cloud' },
+            gunpowder: { id: 'gunpowder', name: 'Poudre', cat: 'gaz', color: '#334155', type: 'powder', desc: 'Explose violemment au contact du feu.', icon: 'fa-bomb' },
+            plasma: { id: 'plasma', name: 'Plasma', cat: 'gaz', color: '#c084fc', type: 'gas', desc: 'Énergie pure destructrice et lumineuse.', icon: 'fa-bolt' },
+
+            // MÉCANIQUE & LOGIQUE
+            wire: { id: 'wire', name: 'Fil Électrique', cat: 'mecanique', color: '#dc2626', type: 'machine', desc: 'Conduit l’électricité entre composants.', icon: 'fa-bolt' },
+            battery: { id: 'battery', name: 'Batterie', cat: 'mecanique', color: '#eab308', type: 'machine', desc: 'Source d’énergie électrique permanente.', icon: 'fa-car-battery' },
+            lamp: { id: 'lamp', name: 'Lampe', cat: 'mecanique', color: '#facc15', type: 'machine', desc: 'S’illumine lorsqu’elle est alimentée.', icon: 'fa-lightbulb' },
+            motor: { id: 'motor', name: 'Moteur', cat: 'mecanique', color: '#64748b', type: 'machine', desc: 'Génère un mouvement rotatif sous tension.', icon: 'fa-gears' },
+            piston: { id: 'piston', name: 'Piston', cat: 'mecanique', color: '#475569', type: 'machine', desc: 'Pousse les éléments lorsqu’activé.', icon: 'fa-arrows-alt-v' },
+            switch: { id: 'switch', name: 'Interrupteur', cat: 'mecanique', color: '#0ea5e9', type: 'machine', desc: 'Permet d’allumer ou couper un circuit.', icon: 'fa-toggle-on' },
+
+            // SPÉCIAL / SLIME AVANCÉ
+            bouncy_slime: { id: 'bouncy_slime', name: 'Slime Rebondissant', cat: 'special', color: '#22c55e', type: 'slime_bounce', desc: 'Slime vert squishy qui fait rebondir violemment les particules et objets.', icon: 'fa-face-grin-tongue-wink' },
+            sticky_slime: { id: 'sticky_slime', name: 'Slime Collant', cat: 'special', color: '#14b8a6', type: 'slime_sticky', desc: 'Slime élastique qui adhère aux surfaces et s’étire dynamiquement.', icon: 'fa-spider' },
+            eraser: { id: 'eraser', name: 'Gomme', cat: 'special', color: '#f43f5e', type: 'tool', desc: 'Efface instantanément n’importe quel élément.', icon: 'fa-eraser' }
+        };
+
+        const CATEGORIES = {
+            solides: ['sand', 'dirt', 'stone', 'wood', 'glass'],
+            fluides: ['water', 'oil', 'lava', 'acid'],
+            gaz: ['fire', 'smoke', 'gunpowder', 'plasma'],
+            mecanique: ['wire', 'battery', 'lamp', 'motor', 'piston', 'switch'],
+            special: ['bouncy_slime', 'sticky_slime', 'eraser']
+        };
+
+        // --- GRID DATA STRUCTURES ---
+        let grid = [];     // Stores element ID strings
+        let colors = [];   // Stores RGB hex or computed color strings
+        let data = [];     // Extra state (energy, health, temperature, velocity vectors, slime elasticity bonds)
+        let activeCells = new Set(); // Optimization for updating only active regions
+
+        function initGrid() {
+            grid = new Array(WIDTH * HEIGHT).fill(null);
+            colors = new Array(WIDTH * HEIGHT).fill('#000000');
+            data = new Array(WIDTH * HEIGHT).fill(0).map(() => ({
+                energy: 0,
+                health: 100,
+                vx: 0,
+                vy: 0,
+                slimeId: 0, // Unique ID for sticky/bouncy cluster bonds
+                stretch: 0
+            }));
+            activeCells.clear();
+        }
+
+        // --- SETUP & LIFECYCLE ---
+        window.addEventListener('load', () => {
+            canvas = document.getElementById('sandboxCanvas');
+            ctx = canvas.getContext('2d');
+
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            initGrid();
+            buildToolbox();
+            buildWiki();
+
+            setupInputListeners();
+
+            // Start main loop
+            requestAnimationFrame(mainLoop);
+        });
+
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            const rect = container.getBoundingClientRect();
+            
+            // Maintain aspect ratio or fit container
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = rect.height + 'px';
+            ctx.scale(dpr, dpr);
+
+            // Compute ideal grid dimensions based on container aspect ratio
+            const cellCountX = 160;
+            const cellCountY = Math.floor(160 * (rect.height / rect.width));
+            
+            if (cellCountY > 50 && cellCountY < 200) {
+                // Resize grid dynamically if needed
+                if (WIDTH !== cellCountX || HEIGHT !== cellCountY) {
+                    WIDTH = cellCountX;
+                    HEIGHT = cellCountY;
+                    initGrid();
+                }
+            }
+        }
+
+        // --- TOOLBOX & UI GENERATION ---
+        function switchCategory(cat) {
+            currentCategory = cat;
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                btn.className = "cat-btn py-2 px-1 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 transition flex flex-col items-center gap-1";
+            });
+            document.getElementById(`cat-${cat}`).className = "cat-btn py-2 px-1 text-xs font-semibold rounded-lg text-emerald-400 bg-slate-700/80 transition flex flex-col items-center gap-1";
+            buildToolbox();
+        }
+
+        function buildToolbox() {
+            const gridContainer = document.getElementById('elements-grid');
+            gridContainer.innerHTML = '';
+
+            CATEGORIES[currentCategory].forEach(elId => {
+                const el = ELEMENTS[elId];
+                if (!el) return;
+
+                const btn = document.createElement('button');
+                btn.className = `p-2.5 rounded-xl border flex items-center space-x-2.5 transition text-left group ${currentElementId === elId ? 'bg-slate-800 border-emerald-500 shadow-lg ring-1 ring-emerald-500/50' : 'bg-slate-800/50 border-slate-700/80 hover:bg-slate-800 hover:border-slate-600'}`;
+                btn.onclick = () => selectElement(elId);
+
+                btn.innerHTML = `
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 shadow-inner" style="background-color: ${el.color}">
+                        <i class="fa-solid ${el.icon} text-xs"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="font-semibold text-xs text-slate-200 truncate group-hover:text-emerald-300">${el.name}</div>
+                        <div class="text-[10px] text-slate-400 truncate">${el.type}</div>
+                    </div>
+                `;
+                gridContainer.appendChild(btn);
+            });
+        }
+
+        function selectElement(id) {
+            currentElementId = id;
+            document.getElementById('hud-tool').innerText = ELEMENTS[id].name;
+            buildToolbox();
+        }
+
+        function setBrushShape(shape) {
+            brushShape = shape;
+            document.getElementById('shape-circle').className = shape === 'circle' ? 'px-3 py-1 text-xs rounded-md bg-emerald-600 text-white font-medium transition' : 'px-3 py-1 text-xs rounded-md text-slate-400 hover:text-slate-200 transition';
+            document.getElementById('shape-square').className = shape === 'square' ? 'px-3 py-1 text-xs rounded-md bg-emerald-600 text-white font-medium transition' : 'px-3 py-1 text-xs rounded-md text-slate-400 hover:text-slate-200 transition';
+        }
+
+        // --- WIKI & GUIDE ---
+        function openWiki() {
+            document.getElementById('wiki-modal').classList.remove('hidden');
+        }
+
+        function closeWiki() {
+            document.getElementById('wiki-modal').classList.add('hidden');
+        }
+
+        function buildWiki(filter = '') {
+            const container = document.getElementById('wiki-content');
+            container.innerHTML = '';
+
+            Object.values(ELEMENTS).forEach(el => {
+                if (filter && !el.name.toLowerCase().includes(filter.toLowerCase()) && !el.desc.toLowerCase().includes(filter.toLowerCase())) return;
+
+                const card = document.createElement('div');
+                card.className = 'bg-slate-800/70 border border-slate-700/80 rounded-xl p-3.5 flex items-start space-x-3.5';
+                card.innerHTML = `
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-md mt-0.5" style="background-color: ${el.color}">
+                        <i class="fa-solid ${el.icon} text-base"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-bold text-sm text-slate-200">${el.name}</h4>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 uppercase">${el.cat}</span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">${el.desc}</p>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function filterWiki(val) {
+            buildWiki(val);
+        }
+
+        // --- INPUT & MOUSE / TOUCH HANDLING ---
+        function setupInputListeners() {
+            const c = canvas;
+
+            c.addEventListener('mousedown', (e) => {
+                isDrawing = true;
+                const rect = c.getBoundingClientRect();
+                drawAt(e.clientX - rect.left, e.clientY - rect.top, e.button === 2);
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDrawing) return;
+                const rect = c.getBoundingClientRect();
+                drawAt(e.clientX - rect.left, e.clientY - rect.top, false);
+            });
+
+            window.addEventListener('mouseup', () => { isDrawing = false; });
+
+            c.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            // Touch support
+            c.addEventListener('touchstart', (e) => {
+                isDrawing = true;
+                const rect = c.getBoundingClientRect();
+                const touch = e.touches[0];
+                drawAt(touch.clientX - rect.left, touch.clientY - rect.top, false);
+                e.preventDefault();
+            }, { passive: false });
+
+            c.addEventListener('touchmove', (e) => {
+                if (!isDrawing) return;
+                const rect = c.getBoundingClientRect();
+                const touch = e.touches[0];
+                drawAt(touch.clientX - rect.left, touch.clientY - rect.top, false);
+                e.preventDefault();
+            }, { passive: false });
+
+            window.addEventListener('touchend', () => { isDrawing = false; });
+
+            // Brush size slider
+            const range = document.getElementById('brush-size-range');
+            range.addEventListener('input', (e) => {
+                brushSize = parseInt(e.target.value);
+                document.getElementById('brush-size-val').innerText = brushSize + ' px';
+                document.getElementById('hud-brush').innerText = brushSize;
+            });
+        }
+
+        function drawAt(clientX, clientY, isEraser) {
+            const containerRect = canvas.getBoundingClientRect();
+            const scaleX = WIDTH / containerRect.width;
+            const scaleY = HEIGHT / containerRect.height;
+
+            const gridX = Math.floor(clientX * scaleX);
+            const gridY = Math.floor(clientY * scaleY);
+
+            const elToDraw = isEraser ? 'eraser' : currentElementId;
+
+            for (let dy = -brushSize; dy <= brushSize; dy++) {
+                for (let dx = -brushSize; dx <= brushSize; dx++) {
+                    if (brushShape === 'circle' && (dx * dx + dy * dy > brushSize * brushSize)) continue;
+
+                    const nx = gridX + dx;
+                    const ny = gridY + dy;
+
+                    if (nx >= 0 && nx < WIDTH && ny >= 0 && ny < HEIGHT) {
+                        const idx = ny * WIDTH + nx;
+                        if (elToDraw === 'eraser') {
+                            grid[idx] = null;
+                            colors[idx] = '#000000';
+                            data[idx] = { energy: 0, health: 100, vx: 0, vy: 0, slimeId: 0, stretch: 0 };
+                        } else {
+                            const el = ELEMENTS[elToDraw];
+                            grid[idx] = elToDraw;
+                            // Add slight color variation for visual richness
+                            colors[idx] = getVariedColor(el.color);
+                            data[idx] = {
+                                energy: elToDraw === 'battery' ? 100 : 0,
+                                health: 100,
+                                vx: (Math.random() - 0.5) * 2,
+                                vy: (Math.random() - 0.5) * 2,
+                                slimeId: (elToDraw.includes('slime')) ? Math.floor(Math.random() * 10000) + 1 : 0,
+                                stretch: 0
+                            };
+                            activeCells.add(idx);
+                        }
+                    }
+                }
+            }
+        }
+
+        function getVariedColor(hex) {
+            let r = parseInt(hex.slice(1, 3), 16);
+            let g = parseInt(hex.slice(3, 5), 16);
+            let b = parseInt(hex.slice(5, 7), 16);
+
+            r = Math.min(255, Math.max(0, r + Math.floor((Math.random() - 0.5) * 20)));
+            g = Math.min(255, Math.max(0, g + Math.floor((Math.random() - 0.5) * 20)));
+            b = Math.min(255, Math.max(0, b + Math.floor((Math.random() - 0.5) * 20)));
+
+            return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+        }
+
+        // --- SIMULATION STEP & PHYSICS ENGINE ---
+        function stepSimulation() {
+            let nextGrid = [...grid];
+            let nextColors = [...colors];
+            let nextData = [...data];
+
+            // Scan bottom-up for gravity elements, top-down or random for others
+            for (let y = HEIGHT - 1; y >= 0; y--) {
+                // Randomize horizontal processing order to avoid directional bias
+                let xs = [];
+                for (let x = 0; x < WIDTH; x++) xs.push(x);
+                xs.sort(() => Math.random() - 0.5);
+
+                for (let i = 0; i < WIDTH; i++) {
+                    let x = xs[i];
+                    let idx = y * WIDTH + x;
+                    let elId = grid[idx];
+                    if (!elId) continue;
+
+                    let el = ELEMENTS[elId];
+                    let d = data[idx];
+
+                    // 1. ADVANCED SLIME PHYSICS: BOUNCY SLIME ('bouncy_slime')
+                    if (elId === 'bouncy_slime') {
+                        // Squishy texture pulsing animation
+                        if (Math.random() < 0.1) {
+                            nextColors[idx] = getVariedColor('#22c55e');
+                        }
+                        // Bounce nearby falling particles or liquids upwards / sideways with high velocity
+                        for (let dy = -1; dy <= 1; dy++) {
+                            for (let dx = -1; dx <= 1; dx++) {
+                                let nx = x + dx, ny = y + dy;
+                                if (nx >= 0 && nx < WIDTH && ny >= 0 && ny < HEIGHT) {
+                                    let nidx = ny * WIDTH + nx;
+                                    let neighborEl = grid[nidx];
+                                    if (neighborEl && (ELEMENTS[neighborEl].type === 'powder' || ELEMENTS[neighborEl].type === 'liquid')) {
+                                        // Bounce particle away with velocity impulse
+                                        let targetX = nx + (dx === 0 ? (Math.random() < 0.5 ? 1 : -1) : dx * 2);
+                                        let targetY = ny - 2; // Jump upwards!
+                                        if (targetX >= 0 && targetX < WIDTH && targetY >= 0 && targetY < HEIGHT && !grid[targetY * WIDTH + targetX]) {
+                                            nextGrid[targetY * WIDTH + targetX] = neighborEl;
+                                            nextColors[targetY * WIDTH + targetX] = colors[nidx];
+                                            nextData[targetY * WIDTH + targetX] = data[nidx];
+                                            nextGrid[nidx] = null;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        continue;
+                    }
+
+                    // 2. ADVANCED SLIME PHYSICS: STICKY SLIME ('sticky_slime')
+                    if (elId === 'sticky_slime') {
+                        // Sticky slime forms elastic bonds with neighbors, stretches when pulled
+                        let attachedNeighbors = 0;
+                        for (let dy = -1; dy <= 1; dy++) {
+                            for (let dx = -1; dx <= 1; dx++) {
+                                let nx = x + dx, ny = y + dy;
+                                if (nx >= 0 && nx < WIDTH && ny >= 0 && ny < HEIGHT) {
+                                    let nidx = ny * WIDTH + nx;
+                                    if (grid[nidx] === 'sticky_slime' || (grid[nidx] && ELEMENTS[grid[nidx]].type === 'solid')) {
+                                        attachedNeighbors++;
+                                    }
+                                }
+                            }
+                        }
+                        // If pulled or unsupported, stretch instead of falling immediately
+                        if (attachedNeighbors < 3 && y < HEIGHT - 1 && !grid[(y + 1) * WIDTH + x]) {
+                            // Elastic stretch down
+                            if (Math.random() < 0.5) {
+                                nextGrid[(y + 1) * WIDTH + x] = 'sticky_slime';
+                                nextColors[(y + 1) * WIDTH + x] = colors[idx];
+                                nextData[(y + 1) * WIDTH + x] = { ...d, stretch: d.stretch + 1 };
+                                nextGrid[idx] = null;
+                            }
+                        }
+                        continue;
+                    }
+
+                    // 3. POWDER PHYSICS (Sand, Dirt, Gunpowder)
+                    if (el.type === 'powder') {
+                        // Fall down
+                        if (y + 1 < HEIGHT) {
+                            let belowIdx = (y + 1) * WIDTH + x;
+                            let belowEl = grid[belowIdx];
+                            if (!belowEl || ELEMENTS[belowEl].type === 'liquid') {
+                                // Swap or fall
+                                nextGrid[belowIdx] = elId;
+                                nextColors[belowIdx] = colors[idx];
+                                nextData[belowIdx] = d;
+                                nextGrid[idx] = belowEl || null;
+                                nextColors[idx] = belowEl ? colors[belowIdx] : '#000000';
+                                continue;
+                            } else {
+                                // Diagonal fall
+                                let dir = Math.random() < 0.5 ? 1 : -1;
+                                if (x + dir >= 0 && x + dir < WIDTH) {
+                                    let diagIdx = (y + 1) * WIDTH + (x + dir);
+                                    if (!grid[diagIdx]) {
+                                        nextGrid[diagIdx] = elId;
+                                        nextColors[diagIdx] = colors[idx];
+                                        nextData[diagIdx] = d;
+                                        nextGrid[idx] = null;
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. LIQUID PHYSICS (Water, Oil, Lava, Acid)
+                    if (el.type === 'liquid') {
+                        // Fall down first
+                        if (y + 1 < HEIGHT && !grid[(y + 1) * WIDTH + x]) {
+                            nextGrid[(y + 1) * WIDTH + x] = elId;
+                            nextColors[(y + 1) * WIDTH + x] = colors[idx];
+                            nextData[(y + 1) * WIDTH + x] = d;
+                            nextGrid[idx] = null;
+                            continue;
+                        } else {
+                            // Spread sideways
+                            let dir = Math.random() < 0.5 ? 1 : -1;
+                            if (x + dir >= 0 && x + dir < WIDTH && !grid[y * WIDTH + (x + dir)]) {
+                                nextGrid[y * WIDTH + (x + dir)] = elId;
+                                nextColors[y * WIDTH + (x + dir)] = colors[idx];
+                                nextData[y * WIDTH + (x + dir)] = d;
+                                nextGrid[idx] = null;
+                                continue;
+                            } else if (x - dir >= 0 && x - dir < WIDTH && !grid[y * WIDTH + (x - dir)]) {
+                                nextGrid[y * WIDTH + (x - dir)] = elId;
+                                nextColors[y * WIDTH + (x - dir)] = colors[idx];
+                                nextData[y * WIDTH + (x - dir)] = d;
+                                nextGrid[idx] = null;
+                                continue;
+                            }
+                        }
+
+                        // Acid dissolving solids
+                        if (elId === 'acid') {
+                            for (let dy = -1; dy <= 1; dy++) {
+                                for (let dx = -1; dx <= 1; dx++) {
+                                    let nx = x + dx, ny = y + dy;
+                                    if (nx >= 0 && nx < WIDTH && ny >= 0 && ny < HEIGHT) {
+                                        let nidx = ny * WIDTH + nx;
+                                        if (grid[nidx] && grid[nidx] !== 'acid' && ELEMENTS[grid[nidx]].type === 'solid') {
+                                            nextGrid[nidx] = null; // Dissolve!
+                                            nextGrid[idx] = null;  // Acid consumes itself
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 5. GAS & FIRE PHYSICS
+                    if (el.type === 'gas') {
+                        if (elId === 'fire') {
+                            // Burn neighbors
+                            for (let dy = -1; dy <= 1; dy++) {
+                                for (let dx = -1; dx <= 1; dx++) {
+                                    let nx = x + dx, ny = y + dy;
+                                    if (nx >= 0 && nx < WIDTH && ny >= 0 && ny < HEIGHT) {
+                                        let nidx = ny * WIDTH + nx;
+                                        let neighbor = grid[nidx];
+                                        if (neighbor === 'wood' || neighbor === 'oil') {
+                                            nextGrid[nidx] = 'fire';
+                                            nextColors[nidx] = '#ef4444';
+                                        }
+                                        if (neighbor === 'gunpowder') {
+                                            // Explosion!
+                                            for (let ex = -3; ex <= 3; ex++) {
+                                                for (let ey = -3; ey <= 3; ey++) {
+                                                    let e_x = nx + ex, e_y = ny + ey;
+                                                    if (e_x >= 0 && e_x < WIDTH && e_y >= 0 && e_y < HEIGHT) {
+                                                        nextGrid[e_y * WIDTH + e_x] = Math.random() < 0.5 ? 'fire' : 'smoke';
+                                                        nextColors[e_y * WIDTH + e_x] = '#f97316';
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            // Fire dies out quickly or turns to smoke
+                            if (Math.random() < 0.3) {
+                                nextGrid[idx] = 'smoke';
+                                nextColors[idx] = '#94a3b8';
+                            }
+                        }
+
+                        // Rise up
+                        if (y - 1 >= 0 && !grid[(y - 1) * WIDTH + x]) {
+                            nextGrid[(y - 1) * WIDTH + x] = elId;
+                            nextColors[(y - 1) * WIDTH + x] = colors[idx];
+                            nextData[(y - 1) * WIDTH + x] = d;
+                            nextGrid[idx] = null;
+                        } else {
+                            let dir = Math.random() < 0.5 ? 1 : -1;
+                            if (y - 1 >= 0 && x + dir >= 0 && x + dir < WIDTH && !grid[(y - 1) * WIDTH + (x + dir)]) {
+                                nextGrid[(y - 1) * WIDTH + (x + dir)] = elId;
+                                nextColors[(y - 1) * WIDTH + (x + dir)] = colors[idx];
+                                nextData[(y - 1) * WIDTH + (x + dir)] = d;
+                                nextGrid[idx] = null;
+                            }
+                        }
+                    }
+                }
+            }
+
+            grid = nextGrid;
+            colors = nextColors;
+            data = nextData;
+        }
+
+        // --- RENDERING LOOP ---
+        function mainLoop(timestamp) {
+            // FPS Calculation
+            frameCount++;
+            if (timestamp - lastTime >= 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastTime = timestamp;
+                document.getElementById('fps-display').innerText = fps;
+            }
+
+            if (isRunning) {
+                stepSimulation();
+            }
+
+            render();
+
+            requestAnimationFrame(mainLoop);
+        }
+
+        function render() {
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const cellW = canvas.width / WIDTH;
+            const cellH = canvas.height / HEIGHT;
+
+            let particleCount = 0;
+
+            for (let y = 0; y < HEIGHT; y++) {
+                for (let x = 0; x < WIDTH; x++) {
+                    let idx = y * WIDTH + x;
+                    let elId = grid[idx];
+                    if (elId) {
+                        particleCount++;
+                        ctx.fillStyle = colors[idx];
+                        ctx.fillRect(x * cellW, y * cellH, cellW + 0.5, cellH + 0.5);
+                    }
+                }
+            }
+
+            totalParticles = particleCount;
+            document.getElementById('particle-count').innerText = particleCount;
+        }
+
+        // --- CONTROLS & UTILITIES ---
+        function togglePlay() {
+            isRunning = !isRunning;
+            const icon = document.getElementById('play-icon');
+            const text = document.getElementById('play-text');
+            if (isRunning) {
+                icon.className = "fa-solid fa-pause";
+                text.innerText = "Pause";
+            } else {
+                icon.className = "fa-solid fa-play";
+                text.innerText = "Lecture";
+            }
+        }
+
+        function clearCanvas() {
+            initGrid();
+            showToast("Sandbox vidé avec succès");
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('sound-icon');
+            if (soundEnabled) {
+                btn.className = "fa-solid fa-volume-high text-emerald-400";
+                showToast("Sons activés");
+            } else {
+                btn.className = "fa-solid fa-volume-xmark";
+                showToast("Sons coupés");
+            }
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            t.classList.remove('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                t.classList.add('opacity-0', 'pointer-events-none');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
